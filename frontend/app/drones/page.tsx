@@ -4,12 +4,14 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
 import { Drone } from '@/types'
+import { useAuth } from '@/lib/auth'
 
 export default function DronesPage() {
   const [drones, setDrones] = useState<Drone[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const router = useRouter()
+  const { user } = useAuth()
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -69,14 +71,18 @@ export default function DronesPage() {
         <div className="flex justify-between items-center mb-8">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Drone Fleet</h1>
-            <p className="mt-2 text-gray-600">Manage your drone fleet and monitor status</p>
+            <p className="mt-2 text-gray-600">
+              {user?.role === 'admin' ? 'Manage your drone fleet and monitor status' : 'Monitor drone fleet status'}
+            </p>
           </div>
-          <button
-            onClick={() => router.push('/drones/new')}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium"
-          >
-            Add New Drone
-          </button>
+          {user?.role === 'admin' && (
+            <button
+              onClick={() => router.push('/drones/new')}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium"
+            >
+              Add New Drone
+            </button>
+          )}
         </div>
 
         {error && (

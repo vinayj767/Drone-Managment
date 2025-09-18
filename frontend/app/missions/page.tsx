@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import api from '@/lib/api'
+import { useAuth } from '@/lib/auth'
 
 interface Mission {
   _id: string
@@ -40,6 +41,7 @@ export default function MissionsPage() {
   const [error, setError] = useState('')
   const [filter, setFilter] = useState<'all' | 'planned' | 'in-progress' | 'completed' | 'aborted'>('all')
   const router = useRouter()
+  const { user } = useAuth()
 
   useEffect(() => {
     const token = localStorage.getItem('token')
@@ -162,15 +164,17 @@ export default function MissionsPage() {
               <h1 className="text-3xl font-bold text-gray-900">Mission Control</h1>
               <p className="mt-2 text-gray-600">Plan, monitor, and manage drone missions</p>
             </div>
-            <button
-              onClick={() => router.push('/missions/new')}
-              className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-              </svg>
-              Plan New Mission
-            </button>
+            {(user?.role === 'admin' || user?.role === 'operator') && (
+              <button
+                onClick={() => router.push('/missions/new')}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+                Plan New Mission
+              </button>
+            )}
           </div>
         </div>
 
@@ -368,7 +372,7 @@ export default function MissionsPage() {
                       >
                         View Details
                       </button>
-                      {mission.status === 'planned' && (
+                      {mission.status === 'planned' && (user?.role === 'admin' || user?.role === 'operator' || user?.role === 'pilot') && (
                         <button 
                           onClick={() => handleStartMission(mission._id)}
                           className="text-green-600 hover:text-green-700 font-medium text-sm"
@@ -376,7 +380,7 @@ export default function MissionsPage() {
                           Start Mission
                         </button>
                       )}
-                      {mission.status === 'in-progress' && (
+                      {mission.status === 'in-progress' && (user?.role === 'admin' || user?.role === 'operator' || user?.role === 'pilot') && (
                         <button 
                           onClick={() => handleMonitorLive(mission._id)}
                           className="text-yellow-600 hover:text-yellow-700 font-medium text-sm"

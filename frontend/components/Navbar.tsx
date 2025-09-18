@@ -16,6 +16,40 @@ export default function Navbar() {
 
   if (!user) return null
 
+  // Role-based navigation items
+  const getNavigationItems = () => {
+    const baseItems = [
+      { href: '/dashboard', label: 'Dashboard' },
+      { href: '/missions', label: 'Missions' },
+      { href: '/reports', label: 'Reports' }
+    ]
+
+    if (user.role === 'admin') {
+      // Admins can access everything
+      return [
+        ...baseItems,
+        { href: '/drones', label: 'Fleet Management' },
+        { href: '/weather', label: 'Weather Command' }
+      ]
+    } else if (user.role === 'operator') {
+      // Operators can view drones but not manage fleet
+      return [
+        ...baseItems,
+        { href: '/drones', label: 'Fleet Status' },
+        { href: '/weather', label: 'Weather' }
+      ]
+    } else {
+      // Pilots have limited access
+      return [
+        { href: '/dashboard', label: 'Dashboard' },
+        { href: '/missions', label: 'My Missions' },
+        { href: '/weather', label: 'Weather' }
+      ]
+    }
+  }
+
+  const navigationItems = getNavigationItems()
+
   return (
     <nav className="bg-white shadow-sm border-b">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -28,36 +62,15 @@ export default function Navbar() {
 
           <div className="flex items-center space-x-4">
             <nav className="flex space-x-4">
-              <Link
-                href="/dashboard"
-                className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/drones"
-                className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Fleet
-              </Link>
-              <Link
-                href="/missions"
-                className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Missions
-              </Link>
-              <Link
-                href="/reports"
-                className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Reports
-              </Link>
-              <Link
-                href="/weather"
-                className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
-              >
-                Weather
-              </Link>
+              {navigationItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+                >
+                  {item.label}
+                </Link>
+              ))}
             </nav>
 
             <div className="flex items-center space-x-2 border-l pl-4">
