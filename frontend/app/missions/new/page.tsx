@@ -10,7 +10,7 @@ import api from '@/lib/api'
 import { Drone, Waypoint } from '@/types'
 
 // Dynamically import the map component to avoid SSR issues
-const MissionMap = dynamic(() => import('@/components/MissionMap'), {
+const WaypointMap = dynamic(() => import('@/components/WaypointMap'), {
   ssr: false,
   loading: () => <div className="h-96 bg-gray-200 rounded-lg flex items-center justify-center">Loading map...</div>
 })
@@ -265,7 +265,7 @@ export default function NewMissionPage() {
               </h3>
               
               <div className="h-96 border rounded-lg">
-                <MissionMap
+                <WaypointMap
                   waypoints={waypoints}
                   polygon={polygon}
                   onWaypointsChange={setWaypoints}
