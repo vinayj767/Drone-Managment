@@ -1,6 +1,7 @@
 import axios from 'axios'
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+// HARDCODED for production - no more environment variable issues
+const API_BASE_URL = 'https://drone-production-b2a3.up.railway.app/api'
 
 export const api = axios.create({
   baseURL: API_BASE_URL,

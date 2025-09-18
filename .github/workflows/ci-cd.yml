@@ -72,29 +72,21 @@ jobs:
   deploy-backend:
     needs: [test-backend]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: false  # Disabled - manual deployment via Railway CLI
     
     steps:
     - uses: actions/checkout@v3
     
     - name: Deploy to Railway
-      uses: railwayapp/railway-deploy@v1
-      with:
-        railway_token: ${{ secrets.RAILWAY_TOKEN }}
-        service: backend
+      run: echo "Deploy backend manually via Railway CLI"
 
   deploy-frontend:
     needs: [test-frontend]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
+    if: false  # Disabled - manual deployment via Vercel CLI
     
     steps:
     - uses: actions/checkout@v3
     
     - name: Deploy to Vercel
-      uses: amondnet/vercel-action@v25
-      with:
-        vercel-token: ${{ secrets.VERCEL_TOKEN }}
-        vercel-org-id: ${{ secrets.VERCEL_ORG_ID }}
-        vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-        working-directory: ./frontend
+      run: echo "Deploy frontend manually via Vercel CLI"

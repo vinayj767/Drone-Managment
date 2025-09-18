@@ -1,6 +1,7 @@
 import { io, Socket } from 'socket.io-client'
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_WEBSOCKET_URL || 'http://localhost:5000'
+// HARDCODED for production - no more environment variable issues
+const SOCKET_URL = 'https://drone-production-b2a3.up.railway.app'
 
 class SocketService {
   private socket: Socket | null = null
