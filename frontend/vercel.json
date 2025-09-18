@@ -8,7 +8,7 @@
     }
   ],
   "env": {
-    "NEXT_PUBLIC_API_URL": "https://drone-backend-production.up.railway.app/api",
-    "NEXT_PUBLIC_WEBSOCKET_URL": "https://drone-backend-production.up.railway.app"
+    "NEXT_PUBLIC_API_URL": "https://drone-production.up.railway.app/api",
+    "NEXT_PUBLIC_WEBSOCKET_URL": "https://drone-production.up.railway.app"
   }
 }
