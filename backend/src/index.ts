@@ -35,10 +35,16 @@ app.use(limiter);
 app.use(cors({
   origin: [
     process.env.FRONTEND_URL || 'http://localhost:3000',
+    'https://drone-survey-frontend-56bx46t14-vinay-jains-projects-d5706ff2.vercel.app',
+    'https://drone-survey-frontend-a07td5i9h-vinay-jains-projects-d5706ff2.vercel.app',
+    /^https:\/\/drone-survey-frontend.*\.vercel\.app$/,
     /^https:\/\/.*\.vercel\.app$/,
     'http://localhost:3000'
   ],
-  credentials: true
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with'],
+  optionsSuccessStatus: 200
 }));
 
 // Body parsing middleware
