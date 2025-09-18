@@ -1,21 +1,9 @@
-'use client'
-
-import { AuthProvider } from '@/lib/auth'
-import Navbar from '@/components/Navbar'
+import AuthenticatedLayout from '@/components/AuthenticatedLayout'
 
 export default function MissionsLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return (
-    <AuthProvider>
-      <div className="min-h-screen bg-gray-50">
-        <Navbar />
-        <main>
-          {children}
-        </main>
-      </div>
-    </AuthProvider>
-  )
+  return <AuthenticatedLayout>{children}</AuthenticatedLayout>
 }

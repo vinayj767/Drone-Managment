@@ -1,6 +1,6 @@
 import AuthenticatedLayout from '@/components/AuthenticatedLayout'
 
-export default function DashboardLayout({
+export default function DronesLayout({
   children,
 }: {
   children: React.ReactNode

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import Navbar from '@/components/Navbar'
 
 interface WeatherData {
   location: string
@@ -101,11 +100,11 @@ export default function WeatherPage() {
 
   const assessFlightConditions = (weather: WeatherData): FlightConditions => {
     const factors = {
-      wind: weather.windSpeed > 20 ? 'unsafe' : weather.windSpeed > 15 ? 'caution' : 'safe',
-      visibility: weather.visibility < 3 ? 'unsafe' : weather.visibility < 5 ? 'caution' : 'safe',
-      precipitation: weather.precipitation > 2 ? 'unsafe' : weather.precipitation > 0.5 ? 'caution' : 'safe',
-      temperature: weather.temperature < 0 || weather.temperature > 40 ? 'unsafe' : 
-                   weather.temperature < 5 || weather.temperature > 35 ? 'caution' : 'safe'
+      wind: weather.windSpeed > 20 ? 'unsafe' as const : weather.windSpeed > 15 ? 'caution' as const : 'safe' as const,
+      visibility: weather.visibility < 3 ? 'unsafe' as const : weather.visibility < 5 ? 'caution' as const : 'safe' as const,
+      precipitation: weather.precipitation > 2 ? 'unsafe' as const : weather.precipitation > 0.5 ? 'caution' as const : 'safe' as const,
+      temperature: weather.temperature < 0 || weather.temperature > 40 ? 'unsafe' as const : 
+                   weather.temperature < 5 || weather.temperature > 35 ? 'caution' as const : 'safe' as const
     }
 
     const unsafeCount = Object.values(factors).filter(f => f === 'unsafe').length
@@ -173,7 +172,6 @@ export default function WeatherPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Navbar />
         <div className="flex items-center justify-center h-64">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
         </div>
@@ -183,7 +181,6 @@ export default function WeatherPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Weather Command</h1>
