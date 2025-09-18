@@ -1,0 +1,20 @@
+version: 2
+services:
+  api:
+    source: backend
+    build:
+      commands:
+        - npm install
+        - npm run build
+    start:
+      command: npm start
+    env:
+      NODE_ENV: production
+      PORT: ${{ PORT }}
+      MONGODB_URI: ${{ MONGODB_URI }}
+      JWT_SECRET: ${{ JWT_SECRET }}
+    healthcheck:
+      path: /api/health
+      interval: 30s
+      timeout: 10s
+      retries: 3
