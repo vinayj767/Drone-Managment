@@ -28,14 +28,16 @@ router.get('/:id', authenticateToken, async (req: AuthRequest, res: Response): P
   }
 });
 
-// Create drone (admin only)
-router.post('/', authenticateToken, requireAdmin, async (req: AuthRequest, res: Response): Promise<void> => {
+// Create drone
+router.post('/', authenticateToken, async (req: AuthRequest, res: Response): Promise<void> => {
   try {
+    console.log('Received drone data:', req.body); // Debug logging
     const drone = new Drone(req.body);
     await drone.save();
     res.status(201).json(drone);
   } catch (error) {
-    res.status(500).json({ error: 'Failed to create drone' });
+    console.error('Error creating drone:', error); // Debug logging
+    res.status(500).json({ error: 'Failed to create drone', details: error });
   }
 });
 
