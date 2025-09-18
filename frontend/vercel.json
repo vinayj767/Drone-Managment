@@ -1,0 +1,14 @@
+{
+  "functions": [
+    {
+      "source": "frontend/**",
+      "destination": "/api/frontend"
+    }
+  ],
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/frontend/$1"
+    }
+  ]
+}
