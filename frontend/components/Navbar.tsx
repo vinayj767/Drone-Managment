@@ -35,6 +35,12 @@ export default function Navbar() {
                 Dashboard
               </Link>
               <Link
+                href="/drones"
+                className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Fleet
+              </Link>
+              <Link
                 href="/missions"
                 className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
               >
@@ -45,6 +51,12 @@ export default function Navbar() {
                 className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
               >
                 Reports
+              </Link>
+              <Link
+                href="/weather"
+                className="text-gray-700 hover:text-primary-600 px-3 py-2 rounded-md text-sm font-medium"
+              >
+                Weather
               </Link>
             </nav>
 
