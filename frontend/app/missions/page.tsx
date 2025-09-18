@@ -50,6 +50,23 @@ export default function MissionsPage() {
     fetchMissions()
   }, [router])
 
+  const handleViewDetails = (missionId: string) => {
+    router.push(`/missions/${missionId}`)
+  }
+
+  const handleStartMission = async (missionId: string) => {
+    try {
+      await api.patch(`/missions/${missionId}`, { status: 'in-progress' })
+      fetchMissions() // Refresh the list
+    } catch (error) {
+      console.error('Error starting mission:', error)
+    }
+  }
+
+  const handleMonitorLive = (missionId: string) => {
+    router.push(`/missions/${missionId}/monitor`)
+  }
+
   const fetchMissions = async () => {
     try {
       const response = await api.get('/missions')
@@ -345,16 +362,25 @@ export default function MissionsPage() {
                       )}
                     </div>
                     <div className="flex items-center space-x-2">
-                      <button className="text-blue-600 hover:text-blue-700 font-medium text-sm">
+                      <button 
+                        onClick={() => handleViewDetails(mission._id)}
+                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                      >
                         View Details
                       </button>
                       {mission.status === 'planned' && (
-                        <button className="text-green-600 hover:text-green-700 font-medium text-sm">
+                        <button 
+                          onClick={() => handleStartMission(mission._id)}
+                          className="text-green-600 hover:text-green-700 font-medium text-sm"
+                        >
                           Start Mission
                         </button>
                       )}
                       {mission.status === 'in-progress' && (
-                        <button className="text-yellow-600 hover:text-yellow-700 font-medium text-sm">
+                        <button 
+                          onClick={() => handleMonitorLive(mission._id)}
+                          className="text-yellow-600 hover:text-yellow-700 font-medium text-sm"
+                        >
                           Monitor Live
                         </button>
                       )}

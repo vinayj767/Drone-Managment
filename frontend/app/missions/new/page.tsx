@@ -46,8 +46,11 @@ export default function NewMissionPage() {
       return
     }
 
-    if (polygon.length < 3) {
-      toast.error('Please draw a mission area on the map')
+    // Use waypoints as polygon if no separate polygon is drawn
+    const missionArea = polygon.length >= 3 ? polygon : waypoints.map(wp => [wp.latitude, wp.longitude])
+    
+    if (missionArea.length < 3) {
+      toast.error('Please add at least 3 waypoints or draw a mission area')
       return
     }
 
@@ -60,7 +63,7 @@ export default function NewMissionPage() {
         waypoints,
         polygon: {
           type: 'Polygon',
-          coordinates: [polygon]
+          coordinates: [missionArea]
         },
         estimatedDuration
       }
