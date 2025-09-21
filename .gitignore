@@ -1,33 +1,20 @@
 # Dependencies
 node_modules/
-*/node_modules/
-
-# Environment variables
-.env
-.env.local
-.env.production
-.env.staging
-
-# Build outputs
-*/dist/
-*/.next/
-*/out/
-
-# Logs
-*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Runtime data
-pids
-*.pid
-*.seed
-*.pid.lock
+# Production build
+dist/
+build/
+.next/
 
-# Coverage directory used by tools like istanbul
-coverage/
-*.lcov
+# Environment variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
 
 # IDE
 .vscode/
@@ -39,12 +26,66 @@ coverage/
 .DS_Store
 Thumbs.db
 
-# Testing
-*/coverage/
+# Logs
+logs
+*.log
 
-# Database
-*.db
-*.sqlite
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# nyc test coverage
+.nyc_output
+
+# Grunt intermediate storage
+.grunt
+
+# Bower dependency directory
+bower_components
+
+# node-waf configuration
+.lock-wscript
+
+# Compiled binary addons
+build/Release
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity
+
+# dotenv environment variables file
+.env
+
+# next.js build output
+.next
 
 # Docker
-docker-compose.override.yml
+.docker/
+
+# Temporary files
+tmp/
+temp/
+
+# Database dumps
+*.sql
+*.db
+
+# Compiled TypeScript
+*.js.map
+*.d.ts

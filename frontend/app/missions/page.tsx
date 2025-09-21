@@ -1,412 +1,660 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
-import api from '@/lib/api'
-import { useAuth } from '@/lib/auth'
+import { motion } from 'framer-motion'
+import apiService from '@/lib/api'
+import { useToast } from '@/contexts/ToastContext'
 
 interface Mission {
   _id: string
-  name: string
+  title: string
   description: string
-  droneId: {
-    _id: string
-    name: string
-    droneModel: string
-  }
-  userId: {
-    _id: string
-    username: string
-  }
-  missionType: string
+  type: 'survey' | 'inspection' | 'monitoring' | 'emergency' | 'commercial'
+  status: 'planned' | 'in-progress' | 'paused' | 'completed' | 'aborted' | 'failed'
   priority: 'low' | 'medium' | 'high' | 'critical'
-  status: 'planned' | 'in-progress' | 'completed' | 'aborted' | 'paused'
-  progress: number
-  startTime: string
-  endTime?: string
-  estimatedDuration: number
-  location: {
-    latitude: number
-    longitude: number
-    address: string
-  }
+  assignedDrone: string
+  assignedPilot: string
+  scheduledStart: string
+  scheduledEnd: string
   altitude: number
   speed: number
-  createdAt: string
+  surveyArea: {
+    type: 'polygon' | 'circle' | 'rectangle'
+    coordinates: Array<{
+      latitude: number
+      longitude: number
+    }>
+  }
+  estimatedDuration?: number
 }
 
 export default function MissionsPage() {
-  const [missions, setMissions] = useState<Mission[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
-  const [filter, setFilter] = useState<'all' | 'planned' | 'in-progress' | 'completed' | 'aborted'>('all')
+  const { user, isLoading, isAuthenticated } = useAuth()
   const router = useRouter()
-  const { user } = useAuth()
+  const { addToast } = useToast()
+  const [missions, setMissions] = useState<Mission[]>([])
+  const [drones, setDrones] = useState<any[]>([])
+  const [pilots, setPilots] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [editingMission, setEditingMission] = useState<Mission | null>(null)
+  const [viewingMission, setViewingMission] = useState<Mission | null>(null)
+  const [newMission, setNewMission] = useState({
+    title: '',
+    description: '',
+    type: 'survey' as 'survey' | 'inspection' | 'monitoring' | 'emergency' | 'commercial',
+    status: 'planned' as 'planned' | 'in-progress' | 'paused' | 'completed' | 'aborted' | 'failed',
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'critical',
+    assignedDrone: '',
+    assignedPilot: '',
+    scheduledStart: '',
+    scheduledEnd: '',
+    altitude: 50,
+    speed: 5,
+    surveyArea: {
+      type: 'rectangle' as 'polygon' | 'circle' | 'rectangle',
+      coordinates: [
+        { latitude: 40.7128, longitude: -74.0060 }, // Default NYC coordinates
+        { latitude: 40.7138, longitude: -74.0050 },
+        { latitude: 40.7118, longitude: -74.0050 },
+        { latitude: 40.7118, longitude: -74.0060 }
+      ]
+    }
+  })
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (!token) {
-      router.push('/login')
-      return
+    if (!isLoading && !isAuthenticated) {
+      router.push('/')
     }
-    fetchMissions()
-  }, [router])
+  }, [isLoading, isAuthenticated, router])
 
-  const handleViewDetails = (missionId: string) => {
-    router.push(`/missions/${missionId}`)
-  }
+  useEffect(() => {
+    fetchData()
+  }, [isAuthenticated])
 
-  const handleStartMission = async (missionId: string) => {
+  const fetchData = async () => {
+    if (!isAuthenticated) return
+    
     try {
-      await api.patch(`/missions/${missionId}`, { status: 'in-progress' })
-      fetchMissions() // Refresh the list
+      setLoading(true)
+      const [missionsRes, dronesRes, usersRes] = await Promise.all([
+        apiService.getMissions(),
+        apiService.getDrones(),
+        apiService.getUsers()
+      ])
+      
+      setMissions(missionsRes.data.data || [])
+      setDrones(dronesRes.data.data || [])
+      setPilots(usersRes.data.data?.filter((u: any) => u.role === 'pilot') || [])
     } catch (error) {
-      console.error('Error starting mission:', error)
-    }
-  }
-
-  const handleMonitorLive = (missionId: string) => {
-    router.push(`/missions/${missionId}/monitor`)
-  }
-
-  const fetchMissions = async () => {
-    try {
-      const response = await api.get('/missions')
-      setMissions(response.data)
-    } catch (error) {
-      console.error('Error fetching missions:', error)
-      setError('Failed to load missions')
+      console.error('Error fetching data:', error)
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to fetch data'
+      })
     } finally {
       setLoading(false)
     }
   }
 
+  const handleAddMission = async () => {
+    try {
+      const response = await apiService.createMission(newMission)
+      setMissions([...missions, response.data.data])
+      setShowAddModal(false)
+      setNewMission({
+        title: '',
+        description: '',
+        type: 'survey',
+        status: 'planned',
+        priority: 'medium',
+        assignedDrone: '',
+        assignedPilot: '',
+        scheduledStart: '',
+        scheduledEnd: '',
+        altitude: 50,
+        speed: 5,
+        surveyArea: {
+          type: 'rectangle',
+          coordinates: [
+            { latitude: 40.7128, longitude: -74.0060 },
+            { latitude: 40.7138, longitude: -74.0050 },
+            { latitude: 40.7118, longitude: -74.0050 },
+            { latitude: 40.7118, longitude: -74.0060 }
+          ]
+        }
+      })
+      addToast({
+        type: 'success',
+        title: 'Success',
+        message: 'Mission created successfully'
+      })
+    } catch (error: any) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: error.message || 'Failed to create mission'
+      })
+    }
+  }
+
+  const handleEditMission = async () => {
+    if (!editingMission) return
+    
+    try {
+      const response = await apiService.updateMission(editingMission._id, editingMission)
+      setMissions(missions.map(m => m._id === editingMission._id ? response.data.data : m))
+      setEditingMission(null)
+      addToast({
+        type: 'success',
+        title: 'Success',
+        message: 'Mission updated successfully'
+      })
+    } catch (error: any) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: error.message || 'Failed to update mission'
+      })
+    }
+  }
+
+  const handleDeleteMission = async (missionId: string) => {
+    if (!window.confirm('Are you sure you want to delete this mission?')) return
+    
+    try {
+      await apiService.deleteMission(missionId)
+      setMissions(missions.filter(m => m._id !== missionId))
+      addToast({
+        type: 'success',
+        title: 'Success',
+        message: 'Mission deleted successfully'
+      })
+    } catch (error: any) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: error.message || 'Failed to delete mission'
+      })
+    }
+  }
+
+  const handleStartMission = async (missionId: string) => {
+    try {
+      await apiService.startMission(missionId)
+      setMissions(missions.map(m => 
+        m._id === missionId ? { ...m, status: 'in-progress' as const } : m
+      ))
+      addToast({
+        type: 'success',
+        title: 'Success',
+        message: 'Mission started successfully'
+      })
+    } catch (error: any) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: error.message || 'Failed to start mission'
+      })
+    }
+  }
+
+  const handlePauseMission = async (missionId: string) => {
+    try {
+      await apiService.pauseMission(missionId)
+      setMissions(missions.map(m => 
+        m._id === missionId ? { ...m, status: 'paused' as const } : m
+      ))
+      addToast({
+        type: 'success',
+        title: 'Success',
+        message: 'Mission paused successfully'
+      })
+    } catch (error: any) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: error.message || 'Failed to pause mission'
+      })
+    }
+  }
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'planned':
-        return 'bg-blue-100 text-blue-800'
-      case 'in-progress':
-        return 'bg-yellow-100 text-yellow-800'
-      case 'completed':
-        return 'bg-green-100 text-green-800'
-      case 'aborted':
-        return 'bg-red-100 text-red-800'
-      case 'paused':
-        return 'bg-gray-100 text-gray-800'
-      default:
-        return 'bg-gray-100 text-gray-800'
+      case 'in-progress': return 'bg-green-100 text-green-800'
+      case 'planned': return 'bg-blue-100 text-blue-800'
+      case 'completed': return 'bg-gray-100 text-gray-800'
+      case 'aborted': return 'bg-red-100 text-red-800'
+      case 'paused': return 'bg-yellow-100 text-yellow-800'
+      case 'failed': return 'bg-red-100 text-red-800'
+      default: return 'bg-gray-100 text-gray-800'
     }
   }
 
   const getPriorityColor = (priority: string) => {
     switch (priority) {
-      case 'critical':
-        return 'bg-red-100 text-red-800 border-red-200'
-      case 'high':
-        return 'bg-orange-100 text-orange-800 border-orange-200'
-      case 'medium':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200'
-      case 'low':
-        return 'bg-green-100 text-green-800 border-green-200'
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200'
+      case 'high': return 'bg-red-100 text-red-800'
+      case 'medium': return 'bg-yellow-100 text-yellow-800'
+      case 'low': return 'bg-green-100 text-green-800'
+      default: return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const formatDuration = (minutes: number) => {
-    const hours = Math.floor(minutes / 60)
-    const mins = minutes % 60
-    return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
-  }
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    })
-  }
-
-  const filteredMissions = missions.filter(mission => 
-    filter === 'all' || mission.status === filter
-  )
-
-  const calculateStats = () => {
-    const total = missions.length
-    const planned = missions.filter(m => m.status === 'planned').length
-    const inProgress = missions.filter(m => m.status === 'in-progress').length
-    const completed = missions.filter(m => m.status === 'completed').length
-    const aborted = missions.filter(m => m.status === 'aborted').length
-    
-    return { total, planned, inProgress, completed, aborted }
-  }
-
-  const stats = calculateStats()
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600"></div>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <div className="flex justify-between items-center">
-            <div>
-              <h1 className="text-3xl font-bold text-gray-900">Mission Control</h1>
-              <p className="mt-2 text-gray-600">Plan, monitor, and manage drone missions</p>
-            </div>
-            {(user?.role === 'admin' || user?.role === 'operator') && (
-              <button
-                onClick={() => router.push('/missions/new')}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                </svg>
-                Plan New Mission
-              </button>
-            )}
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Mission Control</h1>
+            <p className="text-gray-600 mt-2">Plan, monitor, and manage drone missions</p>
           </div>
-        </div>
-
-        {error && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
-            {error}
-          </div>
-        )}
-
-        {/* Statistics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                  </svg>
-                </div>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-blue-100 rounded-md flex items-center justify-center">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Planned</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.planned}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-yellow-100 rounded-md flex items-center justify-center">
-                  <svg className="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                </div>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Active</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.inProgress}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-green-100 rounded-md flex items-center justify-center">
-                  <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                </div>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Completed</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.completed}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <div className="w-8 h-8 bg-red-100 rounded-md flex items-center justify-center">
-                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.732-.833-2.5 0L4.268 18.5c-.77.833.192 2.5 1.732 2.5z" />
-                  </svg>
-                </div>
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Aborted</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.aborted}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Filter Buttons */}
-        <div className="flex space-x-4 mb-6">
-          {(['all', 'planned', 'in-progress', 'completed', 'aborted'] as const).map((status) => (
+          <div className="flex space-x-4">
             <button
-              key={status}
-              onClick={() => setFilter(status)}
-              className={`px-4 py-2 rounded-lg font-medium ${
-                filter === status
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border'
-              }`}
+              onClick={() => router.push('/dashboard')}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
             >
-              {status === 'all' ? 'All Missions' : 
-               status === 'in-progress' ? 'In Progress' : 
-               status.charAt(0).toUpperCase() + status.slice(1)}
+              ← Back to Dashboard
             </button>
-          ))}
+            <button
+              onClick={() => setShowAddModal(true)}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              + Schedule Mission
+            </button>
+          </div>
+        </div>
+
+        {/* Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-sm font-medium text-gray-500">Total Missions</h3>
+            <p className="text-2xl font-bold text-gray-900">{missions.length}</p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-sm font-medium text-gray-500">Active</h3>
+            <p className="text-2xl font-bold text-green-600">
+              {missions.filter(m => m.status === 'in-progress').length}
+            </p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-sm font-medium text-gray-500">Planned</h3>
+            <p className="text-2xl font-bold text-blue-600">
+              {missions.filter(m => m.status === 'planned').length}
+            </p>
+          </div>
+          <div className="bg-white rounded-lg shadow p-6">
+            <h3 className="text-sm font-medium text-gray-500">Completed Today</h3>
+            <p className="text-2xl font-bold text-gray-600">
+              {missions.filter(m => m.status === 'completed').length}
+            </p>
+          </div>
         </div>
 
         {/* Missions List */}
-        <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-          {filteredMissions.length === 0 ? (
-            <div className="text-center py-12">
-              <div className="text-gray-400 mb-4">
-                <svg className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                </svg>
-              </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No missions found</h3>
-              <p className="text-gray-600 mb-4">Get started by planning your first drone mission.</p>
-              <button
-                onClick={() => router.push('/missions/new')}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Plan New Mission
-              </button>
+        <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200">
+            <h2 className="text-lg font-semibold text-gray-900">Mission Schedule</h2>
+          </div>
+          
+          {loading ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="mt-2 text-gray-500">Loading missions...</p>
             </div>
           ) : (
-            <div className="divide-y divide-gray-200">
-              {filteredMissions.map((mission) => (
-                <div key={mission._id} className="p-6 hover:bg-gray-50">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center space-x-4">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900">{mission.name}</h3>
-                        <p className="text-sm text-gray-600">{mission.description}</p>
-                      </div>
-                      <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getPriorityColor(mission.priority)}`}>
-                        {mission.priority} priority
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-3">
-                      <span className={`px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(mission.status)}`}>
-                        {mission.status}
-                      </span>
-                      {mission.status === 'in-progress' && (
-                        <div className="text-sm text-gray-600">
-                          {mission.progress}% complete
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Mission
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Status
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Priority
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Drone
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Pilot
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Start Time
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Actions
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {missions.map((mission) => (
+                    <motion.tr
+                      key={mission._id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3 }}
+                      className="hover:bg-gray-50"
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div>
+                          <div className="text-sm font-medium text-gray-900">{mission.title}</div>
+                          <div className="text-sm text-gray-500">
+                            {mission.surveyArea ? 
+                              `${mission.surveyArea.coordinates[0]?.latitude.toFixed(4)}, ${mission.surveyArea.coordinates[0]?.longitude.toFixed(4)}` : 
+                              'No coordinates'
+                            }
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4 mb-4">
-                    <div>
-                      <p className="text-xs text-gray-500">Drone</p>
-                      <p className="font-medium">{mission.droneId?.name || 'Unassigned'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Type</p>
-                      <p className="font-medium">{mission.missionType}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Duration</p>
-                      <p className="font-medium">{formatDuration(mission.estimatedDuration)}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Altitude</p>
-                      <p className="font-medium">{mission.altitude}m</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Speed</p>
-                      <p className="font-medium">{mission.speed} km/h</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500">Location</p>
-                      <p className="font-medium">{mission.location?.address || 'N/A'}</p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4 text-sm text-gray-600">
-                      <span>Pilot: {mission.userId?.username || 'Unknown'}</span>
-                      <span>Created: {formatDate(mission.createdAt)}</span>
-                      {mission.startTime && (
-                        <span>Started: {formatDate(mission.startTime)}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center space-x-2">
-                      <button 
-                        onClick={() => handleViewDetails(mission._id)}
-                        className="text-blue-600 hover:text-blue-700 font-medium text-sm"
-                      >
-                        View Details
-                      </button>
-                      {mission.status === 'planned' && (user?.role === 'admin' || user?.role === 'operator' || user?.role === 'pilot') && (
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(mission.status)}`}>
+                          {mission.status}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(mission.priority)}`}>
+                          {mission.priority}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {typeof mission.assignedDrone === 'string' ? mission.assignedDrone : 
+                         mission.assignedDrone?.name || 'Unassigned'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {typeof mission.assignedPilot === 'string' ? mission.assignedPilot : 
+                         mission.assignedPilot?.name || mission.assignedPilot?.email || 'Unassigned'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {mission.scheduledStart ? new Date(mission.scheduledStart).toLocaleDateString() : 'Not scheduled'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <button 
-                          onClick={() => handleStartMission(mission._id)}
-                          className="text-green-600 hover:text-green-700 font-medium text-sm"
+                          onClick={() => setViewingMission(mission)}
+                          className="text-blue-600 hover:text-blue-900 mr-3"
                         >
-                          Start Mission
+                          View
                         </button>
-                      )}
-                      {mission.status === 'in-progress' && (user?.role === 'admin' || user?.role === 'operator' || user?.role === 'pilot') && (
+                        {mission.status === 'planned' && (
+                          <button 
+                            onClick={() => handleStartMission(mission._id)}
+                            className="text-green-600 hover:text-green-900 mr-3"
+                          >
+                            Start
+                          </button>
+                        )}
+                        {mission.status === 'in-progress' && (
+                          <button 
+                            onClick={() => handlePauseMission(mission._id)}
+                            className="text-yellow-600 hover:text-yellow-900 mr-3"
+                          >
+                            Pause
+                          </button>
+                        )}
                         <button 
-                          onClick={() => handleMonitorLive(mission._id)}
-                          className="text-yellow-600 hover:text-yellow-700 font-medium text-sm"
+                          onClick={() => setEditingMission(mission)}
+                          className="text-gray-600 hover:text-gray-900 mr-3"
                         >
-                          Monitor Live
+                          Edit
                         </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {mission.status === 'in-progress' && (
-                    <div className="mt-3">
-                      <div className="w-full bg-gray-200 rounded-full h-2">
-                        <div 
-                          className="bg-blue-600 h-2 rounded-full" 
-                          style={{ width: `${mission.progress}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                        <button 
+                          onClick={() => handleDeleteMission(mission._id)}
+                          className="text-red-600 hover:text-red-900"
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
       </div>
+
+      {/* Add/Edit Mission Modal */}
+      {(showAddModal || editingMission) && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-semibold mb-4">
+              {editingMission ? 'Edit Mission' : 'Add New Mission'}
+            </h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Mission Title</label>
+                <input
+                  type="text"
+                  value={editingMission ? editingMission.title : newMission.title}
+                  onChange={(e) => editingMission 
+                    ? setEditingMission({...editingMission, title: e.target.value})
+                    : setNewMission({...newMission, title: e.target.value})
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Description</label>
+                <textarea
+                  value={editingMission ? editingMission.description : newMission.description}
+                  onChange={(e) => editingMission 
+                    ? setEditingMission({...editingMission, description: e.target.value})
+                    : setNewMission({...newMission, description: e.target.value})
+                  }
+                  rows={3}
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Mission Type</label>
+                <select
+                  value={editingMission ? editingMission.type : newMission.type}
+                  onChange={(e) => editingMission 
+                    ? setEditingMission({...editingMission, type: e.target.value as Mission['type']})
+                    : setNewMission({...newMission, type: e.target.value as Mission['type']})
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="survey">Survey</option>
+                  <option value="inspection">Inspection</option>
+                  <option value="monitoring">Monitoring</option>
+                  <option value="emergency">Emergency</option>
+                  <option value="commercial">Commercial</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Priority</label>
+                <select
+                  value={editingMission ? editingMission.priority : newMission.priority}
+                  onChange={(e) => editingMission 
+                    ? setEditingMission({...editingMission, priority: e.target.value as 'low' | 'medium' | 'high'})
+                    : setNewMission({...newMission, priority: e.target.value as 'low' | 'medium' | 'high'})
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Assigned Drone</label>
+                <input
+                  type="text"
+                  value={editingMission ? editingMission.assignedDrone || '' : newMission.assignedDrone}
+                  onChange={(e) => editingMission 
+                    ? setEditingMission({...editingMission, assignedDrone: e.target.value})
+                    : setNewMission({...newMission, assignedDrone: e.target.value})
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Assigned Pilot</label>
+                <input
+                  type="text"
+                  value={editingMission ? editingMission.assignedPilot || '' : newMission.assignedPilot}
+                  onChange={(e) => editingMission 
+                    ? setEditingMission({...editingMission, assignedPilot: e.target.value})
+                    : setNewMission({...newMission, assignedPilot: e.target.value})
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Scheduled Start</label>
+                <input
+                  type="datetime-local"
+                  value={editingMission 
+                    ? editingMission.scheduledStart ? new Date(editingMission.scheduledStart).toISOString().slice(0, 16) : ''
+                    : newMission.scheduledStart
+                  }
+                  onChange={(e) => editingMission 
+                    ? setEditingMission({...editingMission, scheduledStart: e.target.value})
+                    : setNewMission({...newMission, scheduledStart: e.target.value})
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Scheduled End</label>
+                <input
+                  type="datetime-local"
+                  value={editingMission 
+                    ? editingMission.scheduledEnd ? new Date(editingMission.scheduledEnd).toISOString().slice(0, 16) : ''
+                    : newMission.scheduledEnd
+                  }
+                  onChange={(e) => editingMission 
+                    ? setEditingMission({...editingMission, scheduledEnd: e.target.value})
+                    : setNewMission({...newMission, scheduledEnd: e.target.value})
+                  }
+                  className="mt-1 w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+            
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={editingMission ? handleEditMission : handleAddMission}
+                className="flex-1 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                {editingMission ? 'Update' : 'Add'} Mission
+              </button>
+              <button
+                onClick={() => {
+                  setShowAddModal(false)
+                  setEditingMission(null)
+                }}
+                className="flex-1 bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* View Mission Modal */}
+      {viewingMission && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+            <h2 className="text-xl font-semibold mb-4">Mission Details</h2>
+            
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Title</label>
+                <p className="text-sm text-gray-900">{viewingMission.title}</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Description</label>
+                <p className="text-sm text-gray-900">{viewingMission.description}</p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Survey Area</label>
+                <p className="text-sm text-gray-900">
+                  {viewingMission.surveyArea ? 
+                    `${viewingMission.surveyArea.coordinates[0]?.latitude.toFixed(4)}, ${viewingMission.surveyArea.coordinates[0]?.longitude.toFixed(4)}` : 
+                    'Not specified'
+                  }
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Status</label>
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(viewingMission.status)}`}>
+                  {viewingMission.status}
+                </span>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Priority</label>
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getPriorityColor(viewingMission.priority)}`}>
+                  {viewingMission.priority}
+                </span>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Assigned Drone</label>
+                <p className="text-sm text-gray-900">
+                  {typeof viewingMission.assignedDrone === 'string' ? viewingMission.assignedDrone : 
+                   viewingMission.assignedDrone?.name || 'Unassigned'}
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Assigned Pilot</label>
+                <p className="text-sm text-gray-900">
+                  {typeof viewingMission.assignedPilot === 'string' ? viewingMission.assignedPilot : 
+                   viewingMission.assignedPilot?.name || viewingMission.assignedPilot?.email || 'Unassigned'}
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700">Scheduled Start</label>
+                <p className="text-sm text-gray-900">
+                  {viewingMission.scheduledStart 
+                    ? new Date(viewingMission.scheduledStart).toLocaleString() 
+                    : 'Not scheduled'
+                  }
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex justify-end mt-6">
+              <button
+                onClick={() => setViewingMission(null)}
+                className="bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

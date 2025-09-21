@@ -1,44 +1,36 @@
 import { Request, Response, NextFunction } from 'express';
+import { logger } from '../utils/logger';
+
+export interface AppError extends Error {
+  statusCode?: number;
+  isOperational?: boolean;
+}
 
 export const errorHandler = (
-  err: any,
+  error: AppError,
   req: Request,
   res: Response,
   next: NextFunction
 ): void => {
-  console.error(err.stack);
+  const statusCode = error.statusCode || 500;
+  const message = error.message || 'Internal Server Error';
+  const isOperational = error.isOperational || false;
 
-  if (err.name === 'ValidationError') {
-    const errors = Object.values(err.errors).map((error: any) => error.message);
-    res.status(400).json({
-      error: 'Validation Error',
-      details: errors
-    });
-    return;
-  }
-
-  if (err.name === 'CastError') {
-    res.status(400).json({
-      error: 'Invalid ID format'
-    });
-    return;
-  }
-
-  if (err.code === 11000) {
-    const field = Object.keys(err.keyValue)[0];
-    res.status(400).json({
-      error: `${field} already exists`
-    });
-    return;
-  }
-
-  res.status(err.status || 500).json({
-    error: err.message || 'Internal Server Error'
+  // Log error
+  logger.error(`${statusCode} - ${message} - ${req.originalUrl} - ${req.method} - ${req.ip}`, {
+    error: error.stack,
+    url: req.originalUrl,
+    method: req.method,
+    ip: req.ip,
+    userAgent: req.get('User-Agent')
   });
-};
 
-export const notFound = (req: Request, res: Response): void => {
-  res.status(404).json({
-    error: `Route ${req.originalUrl} not found`
-  });
+  // Don't leak error details in production
+  const errorResponse = {
+    success: false,
+    message: process.env.NODE_ENV === 'production' && !isOperational ? 'Something went wrong' : message,
+    ...(process.env.NODE_ENV === 'development' && { stack: error.stack })
+  };
+
+  res.status(statusCode).json(errorResponse);
 };

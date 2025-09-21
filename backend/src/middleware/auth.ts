@@ -1,60 +1,68 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-import { User, IUser } from '../models';
+import { User } from '../models/User';
+import { AppError } from './errorHandler';
 
 export interface AuthRequest extends Request {
-  user?: IUser;
+  user?: any;
 }
 
-export const authenticateToken = async (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): Promise<void> => {
+export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const authHeader = req.headers.authorization;
-    const token = authHeader && authHeader.split(' ')[1];
-
+    const token = req.header('Authorization')?.replace('Bearer ', '');
+    
     if (!token) {
-      res.status(401).json({ error: 'Access token required' });
-      return;
+      const error: AppError = new Error('Access denied. No token provided.');
+      error.statusCode = 401;
+      error.isOperational = true;
+      throw error;
     }
 
-    const jwtSecret = process.env.JWT_SECRET;
-    if (!jwtSecret) {
-      res.status(500).json({ error: 'JWT secret not configured' });
-      return;
-    }
-
-    const decoded = jwt.verify(token, jwtSecret) as { userId: string };
+    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
     const user = await User.findById(decoded.userId).select('-password');
-
+    
     if (!user) {
-      res.status(401).json({ error: 'Invalid token' });
-      return;
+      const error: AppError = new Error('Invalid token. User not found.');
+      error.statusCode = 401;
+      error.isOperational = true;
+      throw error;
     }
 
     req.user = user;
     next();
-  } catch (error) {
-    res.status(403).json({ error: 'Invalid token' });
+  } catch (error: any) {
+    if (error.name === 'JsonWebTokenError') {
+      const authError: AppError = new Error('Invalid token.');
+      authError.statusCode = 401;
+      authError.isOperational = true;
+      next(authError);
+    } else if (error.name === 'TokenExpiredError') {
+      const authError: AppError = new Error('Token expired.');
+      authError.statusCode = 401;
+      authError.isOperational = true;
+      next(authError);
+    } else {
+      next(error);
+    }
   }
 };
 
-export const requireAdmin = (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): void => {
-  if (!req.user) {
-    res.status(401).json({ error: 'Authentication required' });
-    return;
-  }
+export const authorize = (...roles: string[]) => {
+  return (req: AuthRequest, res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      const error: AppError = new Error('Access denied. User not authenticated.');
+      error.statusCode = 401;
+      error.isOperational = true;
+      throw error;
+    }
 
-  if (req.user.role !== 'admin') {
-    res.status(403).json({ error: 'Admin access required' });
-    return;
-  }
+    if (!roles.includes(req.user.role)) {
+      const error: AppError = new Error('Access denied. Insufficient permissions.');
+      error.statusCode = 403;
+      error.isOperational = true;
+      throw error;
+    }
 
-  next();
+    next();
+  };
 };

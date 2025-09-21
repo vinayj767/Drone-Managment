@@ -1,134 +1,140 @@
+import 'reflect-metadata';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
+import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
+import { Server as SocketIOServer } from 'socket.io';
 import dotenv from 'dotenv';
+import 'express-async-errors';
 
 import { connectDatabase } from './config/database';
-import routes from './routes';
-import { errorHandler, notFound } from './middleware';
-import { TelemetryService } from './sockets';
+import { errorHandler } from './middleware/errorHandler';
+import { notFoundHandler } from './middleware/notFoundHandler';
+import { authRoutes } from './routes/auth';
+import { userRoutes } from './routes/users';
+import { droneRoutes } from './routes/drones';
+import { missionRoutes } from './routes/missions';
+import { reportRoutes } from './routes/reports';
+import { dashboardRoutes } from './routes/dashboard';
+import analyticsRoutes from './routes/analytics';
+import { setupSocketHandlers } from './sockets';
+import { logger } from './utils/logger';
+import { swaggerSetup } from './config/swagger';
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
 const server = createServer(app);
+const io = new SocketIOServer(server, {
+  cors: {
+    origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    credentials: true
+  }
+});
+
 const PORT = process.env.PORT || 5000;
-
-// Initialize telemetry service
-const telemetryService = new TelemetryService(server);
-
-// Security middleware
-app.use(helmet());
 
 // Rate limiting
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 100, // limit each IP to 100 requests per windowMs
+  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '900000'), // 15 minutes
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS || '100'), // limit each IP to 100 requests per windowMs
   message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
 });
-app.use(limiter);
 
-// CORS configuration
+// Middleware
+app.use(helmet());
+app.use(compression());
+app.use(morgan('combined', { stream: { write: (message) => logger.info(message.trim()) } }));
 app.use(cors({
-  origin: [
-    process.env.FRONTEND_URL || 'http://localhost:3000',
-    'https://drone-survey-frontend-56bx46t14-vinay-jains-projects-d5706ff2.vercel.app',
-    'https://drone-survey-frontend-a07td5i9h-vinay-jains-projects-d5706ff2.vercel.app',
-    /^https:\/\/drone-survey-frontend.*\.vercel\.app$/,
-    /^https:\/\/.*\.vercel\.app$/,
-    'http://localhost:3000'
-  ],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-requested-with'],
-  optionsSuccessStatus: 200
+  origin: process.env.CORS_ORIGIN || "http://localhost:3000",
+  credentials: true
 }));
-
-// Body parsing middleware
+app.use(limiter);
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
+// Health check
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'OK',
     timestamp: new Date().toISOString(),
-    environment: process.env.NODE_ENV 
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV || 'development'
   });
 });
 
-// API routes
-app.use('/api', routes);
+// API Documentation
+if (process.env.API_DOCS_ENABLED === 'true') {
+  swaggerSetup(app);
+}
 
-// Extend mission routes to work with telemetry
-app.post('/api/missions/:id/start', async (req, res, next) => {
-  try {
-    // Start telemetry simulation
-    await telemetryService.startMissionTelemetry(req.params.id);
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/drones', droneRoutes);
+app.use('/api/missions', missionRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/analytics', analyticsRoutes);
 
-app.post('/api/missions/:id/abort', async (req, res, next) => {
-  try {
-    // Stop telemetry simulation
-    telemetryService.stopMissionTelemetry(req.params.id);
-    next();
-  } catch (error) {
-    next(error);
-  }
-});
+// Socket.IO setup
+setupSocketHandlers(io);
 
-// Error handling middleware
-app.use(notFound);
+// Error handling
+app.use(notFoundHandler);
 app.use(errorHandler);
 
-// Start server
-const startServer = async (): Promise<void> => {
+// Database connection and server start
+const startServer = async () => {
   try {
-    // Connect to database
     await connectDatabase();
-
-    // Start server
+    
     server.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`📡 WebSocket server ready for telemetry`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV}`);
+      logger.info(`🚀 Server running on port ${PORT}`);
+      logger.info(`📖 API Documentation: http://localhost:${PORT}/api-docs`);
+      logger.info(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
     });
   } catch (error) {
-    console.error('Failed to start server:', error);
+    logger.error('Failed to start server:', error);
     process.exit(1);
   }
 };
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err: Error) => {
-  console.error('Unhandled Promise Rejection:', err);
+// Graceful shutdown
+process.on('SIGTERM', () => {
+  logger.info('SIGTERM received. Shutting down gracefully...');
   server.close(() => {
-    process.exit(1);
+    logger.info('Server closed.');
+    process.exit(0);
+  });
+});
+
+process.on('SIGINT', () => {
+  logger.info('SIGINT received. Shutting down gracefully...');
+  server.close(() => {
+    logger.info('Server closed.');
+    process.exit(0);
   });
 });
 
 // Handle uncaught exceptions
-process.on('uncaughtException', (err: Error) => {
-  console.error('Uncaught Exception:', err);
+process.on('uncaughtException', (error) => {
+  logger.error('Uncaught Exception:', error);
   process.exit(1);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
-  server.close(() => {
-    console.log('Process terminated');
-  });
+process.on('unhandledRejection', (reason, promise) => {
+  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
 });
 
-// Start the server
 startServer();
 
-export default app;
+export { app, io };

@@ -1,24 +1,50 @@
 import mongoose from 'mongoose';
+import { logger } from '../utils/logger';
 
 export const connectDatabase = async (): Promise<void> => {
   try {
-    // Try both environment variable names and fallback to hardcoded connection
-    const mongoUri = process.env.MONGODB_URI || process.env.MONGO_URI || 'mongodb+srv://vinayj767:vinayjain@ibm.2jbxbzq.mongodb.net/drone_survey?retryWrites=true&w=majority&appName=IBM';
+    const mongoUri = process.env.MONGODB_URI;
     
-    const conn = await mongoose.connect(mongoUri);
+    if (!mongoUri) {
+      throw new Error('MONGODB_URI environment variable is not defined');
+    }
+
+    const options = {
+      autoIndex: true,
+      serverSelectionTimeoutMS: 10000, // Keep trying to send operations for 10 seconds
+      socketTimeoutMS: 45000, // Close sockets after 45 seconds of inactivity
+      family: 4, // Use IPv4, skip trying IPv6
+    };
+
+    await mongoose.connect(mongoUri, options);
     
-    console.log(`MongoDB Connected: ${conn.connection.host} - Database: drone_survey`);
+    logger.info('✅ MongoDB connected successfully');
+    
+    // Handle connection events
+    mongoose.connection.on('error', (error) => {
+      logger.error('❌ MongoDB connection error:', error);
+    });
+    
+    mongoose.connection.on('disconnected', () => {
+      logger.warn('⚠️ MongoDB disconnected');
+    });
+    
+    mongoose.connection.on('reconnected', () => {
+      logger.info('🔄 MongoDB reconnected');
+    });
+    
   } catch (error) {
-    console.error('Error connecting to MongoDB:', error);
-    process.exit(1);
+    logger.error('❌ MongoDB connection failed:', error);
+    throw error;
   }
 };
 
 export const disconnectDatabase = async (): Promise<void> => {
   try {
     await mongoose.disconnect();
-    console.log('MongoDB Disconnected');
+    logger.info('👋 MongoDB disconnected gracefully');
   } catch (error) {
-    console.error('Error disconnecting from MongoDB:', error);
+    logger.error('❌ Error disconnecting from MongoDB:', error);
+    throw error;
   }
 };
